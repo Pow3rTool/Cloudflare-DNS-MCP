@@ -1,0 +1,51 @@
+[Unit]
+Description=cloudflare-dns-mcp - scoped Cloudflare DNS tool surface (MCP)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Dedicated unprivileged user. One-time setup (self-contained under /opt, the MCP-host way):
+#   useradd --system --no-create-home --shell /usr/sbin/nologin cfdns
+#   install -d -o cfdns -g cfdns -m 700 /opt/cloudflare-dns-mcp/var   # audit dir
+User=cfdns
+Group=cfdns
+EnvironmentFile=/opt/cloudflare-dns-mcp/etc/cloudflare-dns-mcp.env
+ExecStart=/opt/cloudflare-dns-mcp/venv/bin/python /opt/cloudflare-dns-mcp/server.py
+Restart=always
+RestartSec=3
+
+# --- sandbox / least privilege ---------------------------------------------
+NoNewPrivileges=yes
+UMask=0077
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/cloudflare-dns-mcp/var
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# Only this service dies if it runs away.
+MemoryMax=512M
+TasksMax=32
+LimitCORE=0
+# Block link-local/metadata; the only egress this needs is the CF API over HTTPS.
+IPAddressDeny=169.254.0.0/16 fe80::/10
+
+[Install]
+WantedBy=multi-user.target
