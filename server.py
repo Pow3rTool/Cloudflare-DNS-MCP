@@ -453,6 +453,8 @@ def edit_record(ctx: Context, zone: str, record_id: str, type: str = "", name: s
         return _err(f"write rate limit exceeded ({WRITE_RATE_PER_MIN}/min) — slow down and retry.")
     if not (record_id or "").strip():
         return _err("record_id is required (get it from search_records)")
+    if not _HEXID.fullmatch(record_id.strip()):
+        return _err("record_id must be a 32-char hex id (get the exact id from search_records)")
     zid, zname, error = _resolve_zone(zone)
     if error:
         return _err(error)
@@ -510,6 +512,8 @@ def delete_record(ctx: Context, zone: str, record_id: str) -> str:
         return _err(f"write rate limit exceeded ({WRITE_RATE_PER_MIN}/min) — slow down and retry.")
     if not (record_id or "").strip():
         return _err("record_id is required (get it from search_records)")
+    if not _HEXID.fullmatch(record_id.strip()):
+        return _err("record_id must be a 32-char hex id (get the exact id from search_records)")
     zid, zname, error = _resolve_zone(zone)
     if error:
         return _err(error)
