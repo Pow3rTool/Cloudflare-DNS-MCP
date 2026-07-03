@@ -1,0 +1,11 @@
+venv/
+.venv/
+.git/
+__pycache__/
+*.pyc
+.env
+etc/
+var/
+deploy/
+*.bak.*
+.pytest_cache/
