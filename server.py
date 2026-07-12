@@ -10,7 +10,9 @@ Design (deliberately NOT azobo):
   - The credential's ceiling is the lab account (it cannot reach prod — different
     account). The SERVER adds the floor: writes (create/edit/delete) are gated to a zone
     allow-list (CFDNS_EDIT_ZONES) + per-user app roles; delete is additionally off unless
-    CFDNS_ENABLE_DELETE.
+    CFDNS_ENABLE_DELETE. CFDNS_READONLY is a hard global kill-switch on top of all of that —
+    when set, create/edit/delete refuse immediately, before the allow-list/role/rate checks
+    even run, so it holds regardless of how those other knobs are configured.
 
 Five primitives: search_zones, search_records, create_record, edit_record, delete_record.
 """
@@ -57,6 +59,9 @@ WRITE_ROLES = {"dns.write"}
 READ_ZONES  = {z.strip().lower() for z in os.environ.get("CFDNS_READ_ZONES", "").split(",") if z.strip()}
 # delete_record is destructive with no undo — disabled unless explicitly enabled.
 ENABLE_DELETE = os.environ.get("CFDNS_ENABLE_DELETE", "").lower() in ("1", "true", "yes")
+# Hard global kill-switch for create/edit/delete — checked BEFORE the zone allow-list, role
+# check, or rate limiter, so it holds even if CFDNS_EDIT_ZONES/CFDNS_ENABLE_DELETE later drift.
+READONLY = os.environ.get("CFDNS_READONLY", "").lower() in ("1", "true", "yes")
 # Account-wide read: when CFDNS_READ_ZONES is unset, reads default to the EDIT_ZONES fence
 # unless this is explicitly set (then reads span every zone the token can see).
 ALLOW_ACCOUNT_READ = os.environ.get("CFDNS_ALLOW_ACCOUNT_READ", "").lower() in ("1", "true", "yes")
@@ -403,6 +408,9 @@ def create_record(ctx: Context, zone: str, type: str, name: str, content: str,
     if ident is None:
         return _err("unauthenticated: bearer failed validation")
     owner, who, roles = ident
+    if READONLY:
+        _audit(ident, "create_record", {"zone": zone, "name": name, "denied": "read-only mode"}, False, critical=True)
+        return _err("server is in read-only mode (CFDNS_READONLY): all writes are disabled.")
     az_ok, az_why = _authz(roles, write=True)
     if not az_ok:
         _audit(ident, "create_record", {"zone": zone, "name": name, "denied": az_why}, False, critical=True)
@@ -444,6 +452,9 @@ def edit_record(ctx: Context, zone: str, record_id: str, type: str = "", name: s
     if ident is None:
         return _err("unauthenticated: bearer failed validation")
     owner, who, roles = ident
+    if READONLY:
+        _audit(ident, "edit_record", {"zone": zone, "record_id": record_id, "denied": "read-only mode"}, False, critical=True)
+        return _err("server is in read-only mode (CFDNS_READONLY): all writes are disabled.")
     az_ok, az_why = _authz(roles, write=True)
     if not az_ok:
         _audit(ident, "edit_record", {"zone": zone, "record_id": record_id, "denied": az_why}, False, critical=True)
@@ -498,6 +509,9 @@ def delete_record(ctx: Context, zone: str, record_id: str) -> str:
     if ident is None:
         return _err("unauthenticated: bearer failed validation")
     owner, who, roles = ident
+    if READONLY:
+        _audit(ident, "delete_record", {"zone": zone, "record_id": record_id, "denied": "read-only mode"}, False, critical=True)
+        return _err("server is in read-only mode (CFDNS_READONLY): all writes are disabled.")
     # AuthZ for delete = the Dns.Write role (write INTENTIONALLY includes delete — by design,
     # not a missing Dns.Delete role) + the global CFDNS_ENABLE_DELETE kill-switch.
     if not ENABLE_DELETE:
