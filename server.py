@@ -18,7 +18,8 @@ Five primitives: search_zones, search_records, create_record, edit_record, delet
 """
 import os, re, json, time, threading
 import httpx
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp import Context
+from mcp_http_auth import AuthenticatedFastMCP as FastMCP, HTTPAuth
 from mcp.server.transport_security import TransportSecuritySettings
 
 os.umask(0o077)
@@ -314,6 +315,8 @@ def _rec_view(r):
 # MCP
 # ---------------------------------------------------------------------------------
 mcp = FastMCP("cloudflare-dns",
+    http_auth=HTTPAuth(resource=f"https://{PUBLIC_HOST}/cloudflare", tenant=TENANT,
+                       scope=REQUIRED_SCOPE, verify=lambda token: _identity(token)),
     instructions=("Read and manage Cloudflare DNS for THIS account's zones. Five tools: "
         "search_zones (find zones by name substring — prod has 350+), search_records (list/filter "
         "records in one zone), create_record, edit_record and delete_record (writes gated to an "
